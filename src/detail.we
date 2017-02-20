@@ -1,0 +1,171 @@
+<template>
+<div>
+   <wxc-navpage data-role="none" height={{navBarHeight}} background-color="#00A2ED" title={{title}} title-color="white" left-item-src="http://storage1.imgchr.com/Cy7an.png" left-item-color="white" right-item-src="http://storage1.imgchr.com/CyqP0.png"></wxc-navpage>
+    <scroller >
+        <div>
+        <img resize="cover" class="cover" src="{{webContent.image}}"></img>
+        <text  class="imageSource" >{{webContent.image_source}}</text>
+        <text  class="title">{{webContent.title}}</text>
+       </div>
+        <mywebview class="webview" loadweb="{{webContent.body}}"></mywebview>
+    </scroller>
+</div>
+</template>
+
+<script>
+  require('weex-components');
+  var navigator = require('@weex-module/navigator');
+  var stream = require('@weex-module/stream');
+  var modal = require('@weex-module/modal');
+
+  module.exports = {
+    data: {
+      id:"9235162",
+      navBarHeight: 88,
+      title: '',
+      pageName:'卖衣服的新手段：把耐用品变成「不停买新的」',
+      imageResourse:"https://img.alicdn.com/tps/TB1z.55OFXXXXcLXXXXXXXXXXXX-560-560.jpg",
+      dir: 'examples',
+      baseURL: '',
+      webContent:{title: "", image:"",image_source: "",share_url:"",body:""},
+    },
+  
+    created: function() {
+   	  this.loadIntentData();
+   	  this.loadContentData();
+      this.$getConfig(function (config) {
+        var env = config.env;
+        if(env.platform == 'iOS'){
+          var scale = env.scale;
+          var deviceWidth = env.deviceWidth / scale;
+          this.navBarHeight = 64.0 * 750.0 / deviceWidth;
+        }
+      }.bind(this));
+
+      this.$on('naviBar.rightItem.click',function(e){
+        duration = 2;
+        modal.toast({
+          'message': 'naviBar.rightItem.click',
+          'duration': duration
+        });
+      });
+
+      this.$on('naviBar.leftItem.click',function(e){
+       this.pop
+      });
+
+      var bundleUrl = this.$getConfig().bundleUrl;
+      bundleUrl = new String(bundleUrl);
+      console.log('hit', bundleUrl);
+      var nativeBase;
+      var isAndroidAssets = bundleUrl.indexOf('file://assets/') >= 0;
+
+      var isiOSAssets = bundleUrl.indexOf('file:///') >= 0 && bundleUrl.indexOf('WeexDemo.app') > 0;
+      if (isAndroidAssets) {
+        nativeBase = 'file://assets/';
+      }
+      else if (isiOSAssets) {
+        // file:///var/mobile/Containers/Bundle/Application/{id}/WeexDemo.app/
+        // file:///Users/{user}/Library/Developer/CoreSimulator/Devices/{id}/data/Containers/Bundle/Application/{id}/WeexDemo.app/
+        nativeBase = bundleUrl.substring(0, bundleUrl.lastIndexOf('/') + 1);
+      }
+      else {
+        var host = 'localhost:12580';
+        var matches = /\/\/([^\/]+?)\//.exec(this.$getConfig().bundleUrl);
+        if (matches && matches.length >= 2) {
+          host = matches[1];
+        }
+        nativeBase = 'http://' + host + '/' + this.dir + '/build/';
+      }
+      var h5Base = bundleUrl;
+      // in Native
+      var base = nativeBase;
+      if (typeof window == 'object') {
+        // in Browser or WebView
+        base = h5Base;
+      }
+      this.baseURL = base;
+
+      this.loadIntentData();
+   	  this.loadContentData();
+    },
+    methods: {
+   	loadContentData:function(){
+   		var that = this;
+   		stream.fetch({method:'GET',url:"https://news-at.zhihu.com/api/4/news/"+this.id,type:'json'},
+   			function(response){
+   				if (response && response.data) {
+                            that.processServerData(response.data);
+                        } else {
+                            modal.toast({
+                                message: '网络请求失败',
+                                duration: 1
+                            });
+                        }
+                    },function(response){
+                    	 console.log("###response2 = " + JSON.stringify(response));
+                    });
+   	},
+   	processServerData:function(newsContent){
+   		if (newsContent&&newsContent.body&&newsContent.image) {
+   			      var content = {title: "", image:"",image_source: "",share_url:"",body:""};
+   			      content.title=newsContent.title;
+   			      content.image=newsContent.image;
+   			      content.image_source=newsContent.image_source;
+   			      content.share_url=newsContent.share_url;
+   			      content.body=newsContent.body;
+   			      this.webContent=content;
+   		}
+   	},
+   	loadIntentData:function(){
+   		// dist/detail.js?id='+this.storyList[index+1].data.id;
+   		var url = this.$getConfig().bundleUrl;
+   		var index = url.indexOf('?');
+   		var substring = url.substring(index+1);
+   		var params = substring.split('=');
+   		var id =this.id=params[1];
+        var webUrl = 'https://daily.zhihu.com/story/'+id;
+        console.log('xiaqiulei webUrl = '+webUrl)
+   	}
+
+     
+    }
+  }
+</script>
+
+
+<style>
+.scroller {
+   
+    
+  }
+  .cover {
+    width:750;
+    height:400;
+    z-index:-1;
+ 
+  }
+  .title{
+  	font-size:35;
+  	color: #ffffff;
+    position:absolute;
+    bottom:30;
+    left:30;
+  }
+  .imageSource{
+    position:absolute;
+    bottom:10;
+    right:30;
+    color:#bbb7b5;
+    font-size:25;
+  }
+  .mycomponent{
+  	font-size: 30;
+  	height: 50;
+  	width: 750;
+  }
+  .webview{
+    width: 750;
+    height: 750;
+  }
+</style>

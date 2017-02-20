@@ -1,0 +1,9 @@
+/node_modules
+/web
+build/ 
+weex_tmp/
+/platforms/android/build
+/platforms/android/app/build
+/platforms/android/app/build
+/platforms/android/.idea
+/platforms/android/.gradle

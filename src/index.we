@@ -1,0 +1,256 @@
+<template>
+      <div>
+            <list>
+                <!-- 添加下拉刷新-->
+                <refresh class="refresh-view" display="{{refreshDisplay}}" onrefresh="loadFirstData">
+                    <text if="{{(refreshDisplay==='hide')}}">下拉刷新</text>
+                    <loading-indicator class="indicator"></loading-indicator>
+                </refresh>
+
+                <cell repeat="{{item in storyList}}" index="{{$index}}" onclick="onItemClick">
+
+                    <wxc-item-date scope="{{item.type}}" if="{{item.type === 'date'}}"
+                                   item="{{item.data}}">
+                    </wxc-item-date>
+
+                    <wxc-top-story-banner scope="{{item.type}}" if="{{item.type === 'banner'}}"
+                                          item="{{item.data}}">
+                    </wxc-top-story-banner>
+
+                    <wxc-item-story scope="{{item.type}}" if="{{item.type === 'story'}}"
+                                    item="{{item.data}}">
+                    </wxc-item-story>
+
+                    <!-- 自动加载更多 -->
+                    <wxc-item-loading-more scope="{{item.type}}" if="{{item.type === 'loadMore'}}" tips="{{loadingText}}"
+                                           onappear="onLoadingMoreAppear">
+                    </wxc-item-loading-more>
+
+                </cell>
+
+            </list>
+        </div>
+</template>
+<script>
+        require('./components/wxc-top-story-banner.we');
+        require('./components/wxc-item-story.we');
+        require('./components/wxc-item-date.we');
+        require('./components/wxc-item-loading-more.we');
+        var modal = require('@weex-module/modal');
+        var stream = require('@weex-module/stream');
+        var env;
+        var platform;
+    module.exports={
+     data:{
+            loadingText: '正在加载中...',
+            loadMoreOffset: 2,
+            refreshDisplay: 'hide',
+            loadingDisplay: 'hide',
+            loadMoreDateOffset: 1,
+            storyList: []
+     },
+     methods:{
+            onItemClick:function(e){
+                var index = e.target.attr.index;
+                var nextUrl =this.getBase()+'dist/detail.js?id='+this.storyList[index].data.id;
+
+             // navigator.push({'url':nextUrl,'animated' : 'true'},null);
+              require('@weex-module/event').openURL(nextUrl)
+            },
+            loadFirstData:function() {
+                this.loadMoreDateOffset = 1;
+                this.refreshDisplay = 'show';
+                var that = this;
+                    stream.fetch({
+                        method:'GET',
+                        url: "http://news-at.zhihu.com/api/4/news/latest",
+                        type: 'json'
+                    },function(response) {
+                        if (response && response.data) {
+                            that.processServerData(response.data);
+                        } else {
+                            modal.toast({
+                                message: '网络请求失败',
+                                duration: 1
+                            });
+                        }
+                    },function(response) {
+                       console.log("###response2 = " + JSON.stringify(response));
+                    });
+                 },
+            processServerData: function (latestNews) {
+                             var tempStoryList = [];
+                             if (latestNews && latestNews.stories && latestNews.top_stories) {
+                                 var storyItem = {type: '', data: {}};
+                                 storyItem.type = 'banner';
+                                 storyItem.data = latestNews.top_stories;
+                                 tempStoryList.push(storyItem);//add banner data
+                                 var currentDate = this.getCurrentDate();
+                                 var dateItem = {type: 'date', data: {date: currentDate}};
+                                 tempStoryList.push(dateItem);//add date
+                                 for (var i = 0; i < latestNews.stories.length; i++) {
+                                     var item = {type: '', data: {}};
+                                     item.type = 'story';
+                                     item.data = latestNews.stories[i];
+                                     tempStoryList.push(item);//add story item
+                                 }
+                                 this.storyList = tempStoryList;
+                                 this.refreshDisplay = 'hide';
+                                 this.addLoadMoreItemIfNeed();
+                             }
+                         },
+            addLoadMoreItemIfNeed: function () {
+                                if (!this.storyList || this.storyList.length <= 0) {
+                                    return;
+                                }
+                                var lastItem = this.storyList[this.storyList.length - 1];
+                                if (lastItem.type != 'loadMore') {
+                                    var loadMoreItem = {};
+                                    loadMoreItem.type = 'loadMore';
+                                    this.storyList.push(loadMoreItem);
+                                }
+                            },
+            onLoadingMoreAppear: function (e) {
+                //当'加载更多'item出现时，开始请求下一页数据
+                //var appearId = this.rows[e.target.attr.index].id;
+                //console.log('###appearId = ' + appearId);
+                this.onLoadingMore();
+            },
+            onLoadingMore: function () {
+                        this.loadingDisplay = 'show';
+                        this.loadingText = '正在加载中...';
+                        var paramDate = this.getParamDate(false);
+                        console.log("###paramDate = " + paramDate);
+                        var that = this;
+                        stream.fetch({
+                            method: 'GET',
+                            url: "http://news-at.zhihu.com/api/4/news/before/" + paramDate,
+                            type: 'json'
+                        }, function (response) {
+                            console.log('### response = ' + JSON.stringify(response));
+                            if (response && response.data) {
+                                that.processLoadMore(response.data);
+                                that.loadMoreDateOffset = that.loadMoreDateOffset + 1;
+                                that.loadingDisplay = 'hide';
+                            } else {
+                                modal.toast({
+                                    message: '网络请求失败,使用mock数据',
+                                    duration: 1
+                                });
+                            }
+                        }, function (response) {
+                            console.log("###response2 = " + JSON.stringify(response));
+                        });
+                    },
+            processLoadMore: function (beforeNews) {
+                            this.removeLastItemIfNeed();
+                            var tempStoryList = [];
+                            tempStoryList = tempStoryList.concat(this.storyList);
+                            if (beforeNews && beforeNews.stories) {
+                                var currentDate = this.getParamDate(true);
+                                var dateItem = {type: 'date', data: {date: currentDate}};
+                                tempStoryList.push(dateItem);//add date
+                                for (var i = 0; i < beforeNews.stories.length; i++) {
+                                    var item = {type: '', data: {}};
+                                    item.type = 'story';
+                                    item.data = beforeNews.stories[i];
+                                    tempStoryList.push(item);//add story item
+                                }
+                                this.storyList = tempStoryList;
+                            }
+                            this.addLoadMoreItemIfNeed();
+                        },
+            removeLastItemIfNeed: function () {
+                            if (!this.storyList || this.storyList.length <= 0) {
+                                return;
+                            }
+                            var lastItem = this.storyList[this.storyList.length - 1];
+                            if (lastItem.type == 'loadMore') {
+                                this.storyList.pop();
+                            }
+                        },
+
+            getCurrentDate: function () {
+                                              var nowDate = new Date();
+                                              return nowDate.getFullYear() + '-' + (nowDate.getMonth() + 1) + '-' + nowDate.getDate();
+                                          },
+            getParamDate: function (isShow) {
+                            var nowDate = new Date();
+                            var paramTime = nowDate.getTime() - 1000 * 60 * 60 * 24 * this.loadMoreDateOffset;
+                            var paramDate = new Date(paramTime);
+                            var mm = paramDate.getMonth() + 1; // getMonth() is zero-based
+                            var dd = paramDate.getDate();
+                            if (isShow) {
+                                return [paramDate.getFullYear(),
+                                    (mm > 9 ? '' : '0') + mm,
+                                    (dd > 9 ? '' : '0') + dd
+                                ].join('-');
+                            }
+                            return [paramDate.getFullYear(),
+                                (mm > 9 ? '' : '0') + mm,
+                                (dd > 9 ? '' : '0') + dd
+                            ].join('');
+                        },
+            getBase:function(){
+            var bundleUrl = this.$getConfig().bundleUrl;
+            var nativeBase;
+            var isAndroidAssets = bundleUrl.indexOf('file://assets/') >= 0;
+            var isiOSAssets = bundleUrl.indexOf('file:///') >= 0 && bundleUrl.indexOf('WeexDemo.app') > 0;
+            if (isAndroidAssets) {
+                nativeBase = 'file://assets/';
+            } else if (isiOSAssets) {
+                nativeBase = bundleUrl.substring(0, bundleUrl.lastIndexOf('/') + 1);
+            } else {
+                var host = 'localhost:12580';
+                var matches = /\/\/([^\/]+?)\//.exec(this.$getConfig().bundleUrl);
+                if (matches && matches.length >= 2) {
+                    host = matches[1];
+                }
+                nativeBase = 'http://' + host + '/' + this.dir + '/build/';
+            }
+            var h5Base = './' + this.dir + '/build/';
+            // in Native
+            var base = nativeBase;
+            if (typeof window === 'object') {
+                // in Browser or WebView
+                base = h5Base;
+            }
+            return base
+          }
+     },
+
+
+
+     init:function() {
+          var cfg=this.$getConfig();
+          env=cfg.env;
+          platform=env.platform.toLowerCase();
+      },
+
+     created:function() {
+       this.loadFirstData();
+     }
+    }
+
+</script>
+<style >
+
+   .refresh-view {
+        width: 750px;
+        height: 120px;
+        align-items: center;
+    }
+
+    .indicator {
+        height: 60px;
+        width: 60px;
+        padding: 10px;
+        color: #889967;
+    }
+
+    .loading-view {
+        width: 750px;
+        height: 100px;
+        align-items: center;
+    }
+</style>
